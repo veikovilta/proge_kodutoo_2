@@ -1,5 +1,4 @@
 // make so program will work even with the 222692IACB stuff 
-
 #include <stdio.h>
 
 #include <ncurses.h>
@@ -10,6 +9,7 @@
 //file process 
 #define TRANSACTION_ID_LEN 7
 #define DATE_LEN 9
+//hardcode the names to the program 
 #define ARGS_FILE_ACCOUNT argv[1]
 #define ARGS_FILE_TRANSACTIONS argv[2]
 #define BUF_LEN 1000
@@ -18,11 +18,14 @@
 
 
 
+//structs in fileprocess.h
 typedef struct 
 {
 	char transactionId[TRANSACTION_ID_LEN]; 
 	int accountNo; 
-	char date[DATE_LEN]; 
+	char day[3];
+	char month[3];
+	char year[5];   
 	char *balanceChange; 
 	char *description; 
 	
@@ -30,12 +33,23 @@ typedef struct
 
 typedef struct 
 {
-	int accountNo; 
-	char *name; 
+	int accountNo;
+	char *fName;
+	char *lName; 
 	char *accountBalance;
-	transaction *transactions; 
+	transaction *transactions;
 	
 }account;
+
+//struct inside dataprocess.h
+typedef struct
+{
+	//name of the account where the similarity was found 
+	int accountName; 
+	//accounts trasactions to know which transaction had the similarity
+	int *accountTrans; 
+
+}searchData;
 
 //fileprocess
 account * ReadAccountData(int *pLineCount, char *fileName);
@@ -46,11 +60,15 @@ transaction * ReadTransactionData(int *pLineCount, char *fileName);
 int * MatchAccountsToTransactions(transaction *transactions, account *accounts,
 			int accountCount, int transactionCount); 
 void ResetArray(int *arr, int arraySize);
- 
 
 //ncurses 
-void PrintAccounts(account *accounts, int accountCnt, int transactionCnt, int *pTranPerAccount); 
-void PrintAccountTransctions(account accounts, int accountCnt, int accountTranCnt); 
+void PrintAccounts(account *accounts, int accountCnt, int *pTranPerAccount); 
+void PrintAccountTransctions(account accounts, int accountTranCnt); 
+
+//data process
+searchData * SearchForDescriptions(account *accounts, int accountCount, 
+		 int *accountTranCnt, char *description); 
+void PrintSearchedData(searchData *data, account *accounts, int accountCnt, int *accountTranCnt); 
 
 //to without arguments hardcode the file names to the program 
 int main(int argc, char **argv)
@@ -78,7 +96,7 @@ int main(int argc, char **argv)
 	
 	keypad(stdscr, TRUE); 
 	
-	PrintAccounts(accounts, accountCount, transactionCount, pTranPerAccount); 
+	PrintAccounts(accounts, accountCount, pTranPerAccount); 
 	
 	endwin(); 
 	
@@ -89,10 +107,148 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-void PrintAccountTransctions(account accounts, int accountCnt, int accountTranCnt)
+void PrintSearchedData(searchData *data, account *accounts, int accountCnt, int *accountTranCnt)
 {
 	curs_set(0); 
+
+	//~ int row, col; 
 	
+	//~ getmaxyx(stdscr, row, col); 
+	
+	int selected = 0; 
+	int exit = 0; 
+	int ch; 
+
+	int accCounter = 0;
+	int tranCouter = 0;  
+	
+	while (1)
+	{
+		clear(); 
+
+		//account info 
+		mvprintw( 1, 50, "ACCOUNT xd");
+		mvprintw( 2, 42, "============================");
+		
+		attron(A_BOLD | A_DIM);
+		
+		mvprintw( 3, 42,"ACCOUNT NUMBER: %d", (accounts + (data + selected)->accountName)->accountNo); 
+		mvprintw( 4, 42, "ACCOUNT NAME: %s %s", (accounts + (data + selected)->accountName)->fName, (accounts + (data + selected)->accountName)->lName); 
+		mvprintw( 5, 42, "ACCOUNT BALANCE: %s EUR", (accounts + (data + selected)->accountName)->accountBalance); 
+		mvprintw( 12, 42, "DESCRIPTION: %s", (accounts + (data + selected)->accountName)->transactions[selected].description);
+
+		attroff(A_BOLD | A_DIM);
+		
+		ch = getch(); 
+		
+		switch (ch) 
+        { 
+            case KEY_UP:
+                if (selected > 0) 
+                {
+                    selected--;
+                }
+                
+                break;
+            case KEY_DOWN:
+                if (selected < accountCnt - 1) 
+                {
+                    selected++;
+                } 
+
+				break;
+            case '\n':
+                
+                exit = 1; 
+                
+                break;
+        }
+        
+        refresh();
+        
+        if (exit == 1)
+		{
+			break; 
+		} 
+	}
+}
+
+searchData * SearchForDescriptions(account *accounts, int accountCount, 
+		 int *accountTranCnt, char *description)
+{
+	searchData *data = NULL;
+	searchData *tempData = NULL;
+
+	searchData bufData;
+	int *pTran = NULL; 
+	int *pTempTran = NULL;   
+
+	int accountCounter = 0;
+	int transactionCounter = 0; 
+
+	int flag = 0; 
+
+	for (int i = 0; i < accountCount; i++)
+	{
+		for (int j = 0; j < *(accountTranCnt + i); j++)
+		{
+			if (!strcmp(description, accounts[i].transactions[j].description))
+			{
+				mvprintw(0, 0 ,"account:  tere");
+				
+				if (!flag)
+				{
+					accountCounter++;
+					bufData.accountName = i;
+					tempData = (searchData *)realloc(data, sizeof(searchData) * (unsigned)accountCounter);
+					if (tempData == NULL)
+					{
+						exit(EXIT_FAILURE); 
+					}
+					
+					flag = 1; 
+				}
+
+				transactionCounter++; 
+
+				pTempTran = (int *)realloc(pTran, sizeof(int) * (unsigned)transactionCounter); 
+
+				if (pTempTran == NULL)
+				{
+					exit(EXIT_FAILURE); 
+				}
+
+				*(pTempTran + j) = j;
+
+				mvprintw(i, 50 ,"account:  %d", bufData.accountName);
+				
+				pTran = pTempTran; 
+
+				bufData.accountTrans = pTran; 
+
+			}
+			
+		}
+
+		transactionCounter = 0; 
+		*pTran = NULL; 
+		*pTempTran = NULL;
+		flag = 0; 
+
+		*(tempData + (accountCounter - 1)) = bufData;  
+
+		data = tempData;
+	}
+
+	mvprintw(10, 50 ,"accountCounter:  %d", accountCounter); 
+
+	return data; 
+}
+
+void PrintAccountTransctions(account accounts, int accountTranCnt)
+{
+	curs_set(0); 
+
 	//~ int row, col; 
 	
 	//~ getmaxyx(stdscr, row, col); 
@@ -103,14 +259,26 @@ void PrintAccountTransctions(account accounts, int accountCnt, int accountTranCn
 	
 	while (1)
 	{
+		clear(); 
+
+		//account info 
+		mvprintw( 1, 10, "ACCOUNT");
+		mvprintw( 2, 2, "============================");
+
+		//transactions which are account's
 		mvprintw( 7, 10, "TRANSACTION");
 		mvprintw( 8, 2, "============================");
 		
 		attron(A_BOLD | A_DIM);
-		
+
+		mvprintw( 3, 2, "ACCOUNT NUMBER: %d", accounts.accountNo); 
+		mvprintw( 4, 2, "ACCOUNT NAME: %s %s", accounts.fName, accounts.lName); 
+		mvprintw( 5, 2, "ACCOUNT BALANCE: %s EUR", accounts.accountBalance); 
+
 		mvprintw( 9, 2, "TRANSACTION ID: %s", accounts.transactions[selected].transactionId); 
-		mvprintw( 10, 2, "BALANCE CHANGE: %s", accounts.transactions[selected].balanceChange); 
-		mvprintw( 11, 2, "TRANSACTION DATE: %s", accounts.transactions[selected].date); 
+		mvprintw( 10, 2, "BALANCE CHANGE: %s EUR", accounts.transactions[selected].balanceChange);
+		mvprintw( 11, 2, "TRANSACTION DATE: %.2s.%.2s.%.4s", accounts.transactions[selected].month,
+				accounts.transactions[selected].day, accounts.transactions[selected].year); 
 		mvprintw( 12, 2, "DESCRIPTION: %s", accounts.transactions[selected].description); 
 		 
 		attroff(A_BOLD | A_DIM);
@@ -131,8 +299,8 @@ void PrintAccountTransctions(account accounts, int accountCnt, int accountTranCn
                 {
                     selected++;
                 } 
-                
-                break;
+
+				break;
             case '\n':
                 
                 exit = 1; 
@@ -149,18 +317,20 @@ void PrintAccountTransctions(account accounts, int accountCnt, int accountTranCn
 	}
 } 
 
-void PrintAccounts(account *accounts, int accountCnt, int transactionCnt, int *pTranPerAccount)
+void PrintAccounts(account *accounts, int accountCnt, int *pTranPerAccount)
 {
 	curs_set(0); 
 	
 	//~ int row, col; 
 	
 	//~ getmaxyx(stdscr, row, col); 
+
+	searchData *data; 
 	
 	int selected = 0; 
 	int exit = 0; 
 	int ch; 
-	
+
 	while (1)
 	{
 		clear();
@@ -171,7 +341,8 @@ void PrintAccounts(account *accounts, int accountCnt, int transactionCnt, int *p
 		attron(A_BOLD | A_DIM);
 		
 		mvprintw( 3, 2, "ACCOUNT NUMBER: %d", (accounts + selected)->accountNo); 
-		mvprintw( 4, 2, "ACCOUNT NAME: %s", (accounts + selected)->name); 
+		mvprintw( 4, 2, "ACCOUNT NAME: %s %s", (accounts + selected)->fName, 
+			(accounts + selected)->lName); 
 		mvprintw( 5, 2, "ACCOUNT BALANCE: %s EUR", (accounts + selected)->accountBalance); 
 		 
 		attroff(A_BOLD | A_DIM);
@@ -182,7 +353,7 @@ void PrintAccounts(account *accounts, int accountCnt, int transactionCnt, int *p
         {		
             case '\n':
             
-				PrintAccountTransctions(*(accounts + selected), accountCnt, *(pTranPerAccount + selected)); 
+				PrintAccountTransctions(*(accounts + selected), *(pTranPerAccount + selected)); 
 				
 				break; 
             case KEY_UP:
@@ -199,6 +370,15 @@ void PrintAccounts(account *accounts, int accountCnt, int transactionCnt, int *p
                 } 
                 
                 break;
+			case's':
+
+				data = SearchForDescriptions(accounts, accountCnt, pTranPerAccount, "deposit\0");
+
+				getch(); 
+
+				PrintSearchedData(data, accounts, accountCnt, pTranPerAccount); 
+
+				break; 
             case ' ':
                 
                 exit = 1; 
@@ -249,11 +429,11 @@ transaction * ReadTransactionData(int *pLineCount, char *fileName)
 		exit(EXIT_FAILURE);
 	}
 	
-	while (fscanf(finput, "%s %d %s %s %s", tranBuf.transactionId, &tranBuf.accountNo, 
-				tranBuf.date, balanceChangeBuf, descriptionBuf) == 5)
+	while (fscanf(finput, "%s %d %2s %2s %4s %s %s", tranBuf.transactionId, &tranBuf.accountNo, 
+				tranBuf.month, tranBuf.day, tranBuf.year, balanceChangeBuf, descriptionBuf) == 7)
 	{
-		printf("%s %d %s %s %s\n", tranBuf.transactionId, tranBuf.accountNo, 
-				tranBuf.date, balanceChangeBuf, descriptionBuf); 
+		printf("%s %d %.02s %.02s %.04s %s %s\n", tranBuf.transactionId, tranBuf.accountNo, 
+				tranBuf.month, tranBuf.day, tranBuf.year, balanceChangeBuf, descriptionBuf); 
 		
 		pTemp = (transaction *)realloc(pArr, sizeof(transaction) * (unsigned)(count + 1));
 		
@@ -362,7 +542,8 @@ void SafeFreeAccounts(account *accounts, int lineCnt)
 {
 	for (int i = 0; i < lineCnt; i++)
 	{
-		free((accounts + i)->name);
+		free((accounts + i)->fName);
+		free((accounts + i)->lName);
 		free((accounts + i)->accountBalance);
 		//~ free((accounts + i)->transactions);
 	}
@@ -382,7 +563,8 @@ account * ReadAccountData(int *pLineCount, char *fileName)
     account *pTemp = NULL; 
     
     account accBuf; 
-	char nameBuf[BUF_LEN];
+	char fNameBuf[BUF_LEN];
+	char lNameBuf[BUF_LEN];
 	char accountBalanceBuf[BUF_LEN];
 	
 	FILE *finput = fopen(fileName, "r"); 
@@ -393,7 +575,8 @@ account * ReadAccountData(int *pLineCount, char *fileName)
 		return 0;
 	}
 	
-	while (fscanf(finput, "%d %s %s", &accBuf.accountNo, nameBuf, accountBalanceBuf) == 3)
+	while (fscanf(finput, "%d %s %s %s", &accBuf.accountNo, fNameBuf,
+			lNameBuf, accountBalanceBuf) == 4)
 	{
 		pTemp = (account *)realloc(pArr, sizeof(account) * (unsigned)(count + 1));
 		
@@ -404,12 +587,14 @@ account * ReadAccountData(int *pLineCount, char *fileName)
 		
 		*(pTemp + count) = accBuf;
 		
-		(pTemp + count)->name = strdup(nameBuf);
+		(pTemp + count)->fName = strdup(fNameBuf);
+		(pTemp + count)->lName = strdup(lNameBuf);
 		(pTemp + count)->accountBalance = strdup(accountBalanceBuf);
 		
 		pArr = pTemp; 
 		
-		printf("%d %s %s\n", (pArr+count)->accountNo, (pArr+count)->name, (pArr+count)->accountBalance); 
+		printf("%d %s %s %s %s\n", (pArr+count)->accountNo, 
+			(pArr+count)->fName, (pArr+count)->lName, (pArr+count)->accountBalance); 
 		
 		count++; 	
 	}
